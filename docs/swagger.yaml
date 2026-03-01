@@ -1,0 +1,135 @@
+openapi: 3.1.0
+info:
+  title: Activities API
+  version: 1.0.0
+  description: API for creating journal entries in the Mind Mirror module.
+
+servers:
+  - url: http://localhost:8080/api/v1
+
+paths:
+  /activities/mind-mirror/:
+    post:
+      summary: Create a new journal entry
+      operationId: createJournalEntry
+      security:
+        - bearerAuth: []
+      tags:
+        - Journal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+                - content
+              properties:
+                title:
+                  type: string
+                  minLength: 5
+                  maxLength: 100
+                  example: "Test journal 2"
+                content:
+                  type: string
+                  minLength: 20
+                  maxLength: 2000
+                  example: "Once upon a time ako ay nagawa ng api para sa thesis namin tangina ulit"
+      responses:
+        "201":
+          description: Journal entry created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  code:
+                    type: string
+                    example: JOURNAL_ENTRY_CREATED
+                  message:
+                    type: string
+                    example: Journal entry created successfully
+                  data:
+                    type: object
+                    properties:
+                      journal_id:
+                        type: string
+                        format: uuid
+                        example: 1b1e79cf-5a59-40c1-ad08-4e12f922b309
+                      user_id:
+                        type: string
+                        format: uuid
+                        example: 6bf00386-77e5-4a02-9ed9-5f4f294ceb8b
+                      created_at:
+                        type: string
+                        format: date-time
+                        example: 2025-09-24T18:49:10.302Z
+                      updated_at:
+                        type: string
+                        format: date-time
+                        example: 2025-09-24T18:49:10.302Z
+                      is_deleted:
+                        type: boolean
+                        example: false
+                      title:
+                        type: string
+                        example: Test journal 2
+                      content:
+                        type: string
+                        example: Once upon a time ako ay nagawa ng api para sa thesis namin tangina ulit
+        "400":
+          description: Bad request - validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        code:
+          type: string
+          example: AUTH_NO_TOKEN
+        message:
+          type: string
+          example: No token provided
+        details:
+          type: object
+          description: Optional debug information, omitted in production
+          properties:
+            stack:
+              type: string
+              example: "Error: No token provided\n    at new AppError ..."
