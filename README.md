@@ -1,6 +1,6 @@
-# Heron Wellnest Chat Bot API
+# Heron Wellnest Notification API
 
-A real-time chat microservice for the Heron Wellnest platform. This service provides endpoints for managing chat sessions and messages between students and an AI-powered wellbeing bot, with support for encrypted message storage and asynchronous bot response handling via Pub/Sub.
+Notification microservice for the Heron Wellnest platform. This service provides authenticated endpoints for students to fetch and manage notifications, plus an internal endpoint for secure notification ingestion from Pub/Sub or internal services.
 
 ## 📋 Table of Contents
 
@@ -16,15 +16,16 @@ A real-time chat microservice for the Heron Wellnest platform. This service prov
 
 ## ✨ Features
 
-- Get or create active chat sessions for authenticated students
-- Send and retrieve encrypted chat messages
-- Asynchronous bot response handling via Google Cloud Pub/Sub
-- Polling endpoint for bot responses with session state management
-- Session status tracking (active, waiting_for_bot, failed, escalated, ended)
-- Message sequence validation to prevent concurrent messages
-- Failed session retry mechanism
-- Role-protected endpoints (student) using JWT-based middleware
-- Type-safe codebase with TypeScript and TypeORM
+- Retrieve paginated notifications for authenticated students
+- Retrieve all unread notifications
+- Retrieve unread notification count (badge-friendly)
+- Mark a single notification as read
+- Mark all notifications as read
+- Soft-delete notifications (`is_deleted = true`)
+- Internal notification creation endpoint for Pub/Sub/service-to-service calls
+- JWT-based auth for user endpoints (`heronAuth.middleware`)
+- Google OIDC token validation for internal Pub/Sub endpoint (`googleAuth.middleware`)
+- Type-safe TypeScript codebase with TypeORM and PostgreSQL
 
 ## 🛠 Tech Stack
 
@@ -33,10 +34,12 @@ A real-time chat microservice for the Heron Wellnest platform. This service prov
 - **Framework**: Express.js
 - **Database**: PostgreSQL
 - **ORM**: TypeORM
-- **Auth**: JWT-based middleware (service uses `heronAuth.middleware`)
-- **Message Queue**: Google Cloud Pub/Sub
-- **Encryption**: AES-256-CBC for message content
-- **Testing**: Jest
+- **Auth**:
+  - Heron JWT verification for user-facing endpoints
+  - Google-signed JWT verification for internal Pub/Sub endpoint
+- **Validation**: Zod (environment validation)
+- **API Docs**: Swagger (OpenAPI via `swagger-jsdoc` + `swagger-ui-express`)
+- **Testing**: Jest + Supertest
 - **Linting**: ESLint
 - **Containerization**: Docker
 - **Cloud Platform**: Google Cloud Run
@@ -44,24 +47,27 @@ A real-time chat microservice for the Heron Wellnest platform. This service prov
 
 ## 🏗 Architecture
 
-The service follows a layered architecture with asynchronous bot integration:
+The service follows a layered architecture:
 
-- **Controllers** — HTTP handlers, input validation, and response shaping
-- **Services** — business logic, encryption/decryption, and Pub/Sub publishing
-- **Repositories** — TypeORM data access and database operations
-- **Models** — TypeORM entities (ChatSession, ChatMessage)
+- **Controllers** — HTTP request handling, request validation, and response formatting
+- **Services** — business logic for notification read/unread state and deletion flows
+- **Repositories** — TypeORM data-access operations
+- **Models** — `Notification` entity and database mapping
+- **Middlewares** — request logging, auth checks, and centralized error handling
 
-### Message Flow
+### Notification Flow
 
-1. **User sends message**: Controller validates → Service encrypts and stores message → Publishes `CHAT_MESSAGE_CREATED` event to Pub/Sub → Session marked as `waiting_for_bot`
-2. **Bot worker processes**: Subscribes to Pub/Sub → Generates response → Stores encrypted bot message → Updates session status to `active`
-3. **User polls for response**: Controller requests bot message → Service decrypts and returns message if available
+1. Internal producer sends a request to `POST /api/v1/notification/internal/pubsub` with Google OIDC Bearer token
+2. Service validates payload (`userId`, `type`, `title`, `content`) and persists notification
+3. Student clients retrieve notifications using user-authenticated endpoints
+4. Student can mark notifications read/read-all or soft-delete
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 
 - Node.js 20+
+- PostgreSQL
 - Docker (optional)
 - PostgreSQL database
 
@@ -71,7 +77,7 @@ The service follows a layered architecture with asynchronous bot integration:
 
 ```bash
 git clone <repository-url>
-cd chat-api
+cd notification-api
 ```
 
 2. Install dependencies
@@ -80,158 +86,148 @@ cd chat-api
 npm install
 ```
 
-3. Create `.env` in the project root (see Environment Variables below)
+3. Create `.env` in the project root (see [Environment Variables](#environment-variables))
 
-4. Start the development server
+4. Run the development server
 
 ```bash
 npm run dev
 ```
 
-The API will be available at `http://localhost:8080` by default.
+The API runs on `http://localhost:8080` by default.
+
+### Build & Start
+
+```bash
+npm run build
+npm run start
+```
 
 ### Docker (optional)
 
 Build and run locally:
 
 ```bash
-docker build -t hw-chat-bot-api .
-docker run -p 8080:8080 --env-file .env hw-chat-bot-api
+docker build -t hw-notification-api .
+docker run -p 8080:8080 --env-file .env hw-notification-api
 ```
 
 ## 📡 API Endpoints
 
+Base path: `/api/v1/notification`
+
 ### Health
 
-- `GET /health` — basic health check
+- `GET /health` — Basic health check
 
-### Journals
+### Internal (service-to-service)
 
-- `GET /journals` — list journal entries
-- `POST /journals` — create a journal entry
+- `POST /internal/pubsub` — Create a notification (protected by Google OIDC middleware)
 
-### Gratitude Jar
-
-- `GET /gratitude` — list gratitude entries
-- `POST /gratitude` — create a gratitude entry
-
-### Mood Check-ins
-
-- `GET /mood-checks` — list mood check-ins
-- `POST /mood-checks` — record a mood check-in
-
-### Flipfeel
-
-- `GET /flipfeel/questions` — list flipfeel questions
-- `POST /flipfeel/responses` — submit a response
-
-### Badges
-
-- `GET /badges` — list user badges (awarded)
-- `GET /badges/all-obtainable` — list all badges and whether the user has obtained them
-
-Example response shape for `/badges/all-obtainable`:
+Expected body:
 
 ```json
 {
-	"success": true,
-	"code": "ALL_OBTAINABLE_BADGES_RETRIEVED",
-	"message": "All obtainable badges retrieved successfully",
-	"data": {
-		"badges": [
-			{
-				"badge": {
-					"badge_id": "uuid",
-					"name": "New Beginnings",
-					"description": "You’ve written your first journal.",
-					"icon_url": null,
-					"awarded_at": "1970-01-01T00:00:00.000Z"
-				},
-				"is_obtained": false
-			}
-		],
-		"total": 1
-	}
+  "userId": "98765432-1234-5678-9abc-def012345678",
+  "type": "system_alerts",
+  "title": "New message received",
+  "content": "You have a new notification.",
+  "data": {
+    "source": "guidance-session",
+    "referenceId": "abc-123"
+  }
 }
 ```
 
+Valid notification types:
+
+- `activities`
+- `reminders`
+- `guidance_session`
+- `system_alerts`
+
+### Student endpoints (Bearer token required)
+
+- `GET /` — Retrieve paginated notifications
+  - Query params:
+    - `limit` (default `20`, max `50`)
+    - `lastNotificationId` (cursor)
+- `GET /unread` — Retrieve all unread notifications
+- `GET /unread/count` — Retrieve unread notification count
+- `PATCH /read-all` — Mark all unread notifications as read
+- `PATCH /:notificationId/read` — Mark a specific notification as read
+- `DELETE /:notificationId` — Soft-delete a notification
+
 ## 🔧 Environment Variables
 
-Required variables (check `src/config/env.config.ts` for exact names and validation):
+Source of truth: `src/config/env.config.ts`
 
 | Variable | Description | Example |
 |---|---|---|
-| `NODE_ENV` | Application environment | `development` or `production` |
-| `PORT` | Server port | `8080` |
-| `DB_HOST` | Database host | `localhost` |
-| `DB_PORT` | Database port | `5432` |
-| `DB_USER` | Database user | `postgres` |
-| `DB_PASSWORD` | Database password | `password` |
-| `DB_NAME` | Database name | `chat_bot` |
-| `JWT_SECRET` | JWT signing secret used by `heronAuth` middleware | `your-jwt-secret` |
-| `JWT_ISSUER` | Service that issues the JWT tokens | `heron-auth-api` |
-| `JWT_AUDIENCE` | Audience of the JWT token | `heron-services` |
-| `JWT_ALGORITHM` | Algorithm used to sign the JWT token | `HS256` |
-| `MESSAGE_CONTENT_ENCRYPTION_KEY` | Encryption key (32 bytes) for AES-256-CBC message encryption | `your-32-byte-encryption-key-here` |
-| `MESSAGE_CONTENT_ENCRYPTION_ALGORITHM` | Encryption algorithm | `aes-256-cbc` |
-| `PUBSUB_CHAT_BOT_TOPIC` | Google Cloud Pub/Sub topic name for bot message events | `chat-bot-messages` |
-
-Store production secrets in Google Cloud Secret Manager and reference them in Cloud Run deployment.
+| `NODE_ENV` | Application environment | `development` / `production` / `test` |
+| `PORT` | HTTP server port | `8080` |
+| `DB_HOST` | PostgreSQL host | `localhost` |
+| `DB_PORT` | PostgreSQL port | `5432` |
+| `DB_USER` | PostgreSQL user | `postgres` |
+| `DB_PASSWORD` | PostgreSQL password | `password` |
+| `DB_NAME` | PostgreSQL database name | `heron_wellnest_db` |
+| `JWT_ALGORITHM` | JWT algorithm for user token validation | `HS256` or `RS256` |
+| `JWT_SECRET` | Required when `JWT_ALGORITHM=HS256` | `<min-32-char-secret>` |
+| `JWT_PRIVATE_KEY` | Required when `JWT_ALGORITHM=RS256` | `<private-key-content>` |
+| `JWT_PUBLIC_KEY` | Required when `JWT_ALGORITHM=RS256` | `<public-key-content>` |
+| `JWT_ISSUER` | Expected token issuer | `heron-wellnest-auth-api` |
+| `JWT_AUDIENCE` | Expected token audience | `heron-wellnest-users` |
+| `MESSAGE_CONTENT_ENCRYPTION_KEY` | Encryption key (min 32 chars) | `<32+ chars>` |
+| `MESSAGE_CONTENT_ENCRYPTION_ALGORITHM` | Encryption algorithm | `aes-256-gcm` |
+| `MESSAGE_CONTENT_ENCRYPTION_IV_LENGTH` | IV length in bytes | `16` |
+| `MESSAGE_CONTENT_ENCRYPTION_KEY_LENGTH` | Key length in bytes | `32` |
+| `PUBSUB_AUDIENCE` | Expected audience for Google Pub/Sub JWT | `https://<service-url>` |
+| `PUBSUB_SERVICE_ACCOUNT_EMAIL` | Expected Pub/Sub service account email | `pubsub-invoker@project.iam.gserviceaccount.com` |
 
 ## 🧪 Testing
 
-Run tests (Jest):
+Run tests:
 
 ```bash
 npm test
 ```
 
-Run linter (ESLint):
+Run linter:
 
 ```bash
 npm run lint
-npm run lint:fix
 ```
 
 ## 📦 Deployment
 
 ### GitHub Actions CI/CD
 
-The repository uses GitHub Actions for automated deployment:
+Recommended flow:
 
-- **`staging` branch** — runs ESLint and tests only (no deployment)
-- **`main` branch** — runs ESLint, tests, builds Docker image, pushes to Artifact Registry, and deploys to Google Cloud Run
+- Push to `staging` to validate lint/tests
+- Merge to `main` for production deployment
 
-**Workflow**: Push to `staging` to validate changes → Merge to `main` to deploy to production
+(Exact workflow details depend on your repository workflow files.)
 
-### Manual deploy to Cloud Run
-
-1. Build and push container image
+### Manual deploy to Cloud Run (example)
 
 ```bash
-docker build -t us-central1-docker.pkg.dev/heron-wellnest/heron-wellnest-repo/hw-chat-bot-api:latest .
-docker push us-central1-docker.pkg.dev/heron-wellnest/heron-wellnest-repo/hw-chat-bot-api:latest
-```
+docker build -t us-central1-docker.pkg.dev/<project-id>/<repo>/hw-notification-api:latest .
+docker push us-central1-docker.pkg.dev/<project-id>/<repo>/hw-notification-api:latest
 
-2. Deploy
-
-```bash
-gcloud run deploy hw-chat-bot-api \
-  --image us-central1-docker.pkg.dev/heron-wellnest/heron-wellnest-repo/hw-chat-bot-api:latest \
+gcloud run deploy hw-notification-api \
+  --image us-central1-docker.pkg.dev/<project-id>/<repo>/hw-notification-api:latest \
   --region us-central1 \
   --platform managed \
   --allow-unauthenticated \
   --set-env-vars NODE_ENV=production,DB_USER=...,DB_NAME=...,DB_HOST=...,DB_PORT=5432 \
-  --set-secrets DB_PASSWORD=DB_PASSWORD:latest,MESSAGE_CONTENT_ENCRYPTION_KEY=CONTENT_ENCRYPTION_KEY:latest,JWT_SECRET=JWT_SECRET:latest
+  --set-secrets DB_PASSWORD=DB_PASSWORD:latest,JWT_SECRET=JWT_SECRET:latest
 ```
 
 ## 📁 Project Structure
 
-```
-chat-api/
-├── .github/
-│   └── workflows/
-│       └── workflow.yml
+```text
+notification-api/
 ├── docs/
 │   └── swagger.yaml
 ├── src/
@@ -241,26 +237,22 @@ chat-api/
 │   │   ├── env.config.ts
 │   │   └── pubsub.config.ts
 │   ├── controllers/
-│   │   ├── chatMessage.controller.ts
-│   │   └── chatSession.controller.ts
+│   │   └── notification.controller.ts
 │   ├── interface/
 │   │   └── authRequest.interface.ts
 │   ├── middlewares/
 │   │   ├── error.middleware.ts
+│   │   ├── googleAuth.middleware.ts
 │   │   ├── heronAuth.middleware.ts
 │   │   └── logger.middleware.ts
 │   ├── models/
-│   │   ├── chatMessage.model.ts
-│   │   └── chatSession.model.ts
+│   │   └── notification.model.ts
 │   ├── repository/
-│   │   ├── chatMessage.repository.ts
-│   │   └── chatSession.repository.ts
+│   │   └── notification.repository.ts
 │   ├── routes/
-│   │   ├── chatMessage.routes.ts
-│   │   └── chatSession.routes.ts
+│   │   └── notification.routes.ts
 │   ├── services/
-│   │   ├── chatMessage.service.ts
-│   │   └── chatSession.service.ts
+│   │   └── notification.service.ts
 │   ├── tests/
 │   │   ├── auth.test.ts
 │   │   └── dbConnection.test.ts
@@ -268,24 +260,16 @@ chat-api/
 │   │   ├── accessTokenClaim.type.ts
 │   │   ├── apiResponse.type.ts
 │   │   ├── appError.type.ts
-│   │   ├── auth.type.ts
-│   │   ├── encryptedField.type.ts
-│   │   ├── getOrCreateSessionResult.type.ts
-│   │   ├── jwtConfig.type.ts
-│   │   ├── paginatedSessionMessages.type.ts
-│   │   └── safeChatMessage.type.ts
+│   │   ├── json.d.ts
+│   │   └── jwtConfig.type.ts
 │   ├── utils/
 │   │   ├── asyncHandler.util.ts
 │   │   ├── authorization.util.ts
-│   │   ├── crypto.util.ts
 │   │   ├── jwt.util.ts
 │   │   ├── logger.util.ts
-│   │   ├── message.util.ts
-│   │   ├── pubsub.util.ts
-│   │   └── session.util.ts
+│   │   └── pubsub.util.ts
 │   ├── app.ts
 │   └── index.ts
-├── .gitignore
 ├── Dockerfile
 ├── eslint.config.js
 ├── jest.config.js
@@ -296,25 +280,11 @@ chat-api/
 
 ## 👨‍💻 Development
 
-### Code Style
-
-The project uses ESLint for linting. Run:
-
-```bash
-# Run linter
-npm run lint
-
-# Fix auto-fixable issues
-npm run lint:fix
-```
-
 ### API Documentation
 
-Interactive API documentation is available via Swagger UI when running the server:
+Swagger UI is available when running locally:
 
-```
-http://localhost:8080/api-docs
-```
+- `http://localhost:8080/api-docs`
 
 ## 📄 License
 
@@ -322,16 +292,16 @@ This project is proprietary software developed for the Heron Wellnest platform.
 
 ## 👥 Authors
 
-- **Arthur M. Artugue** - Lead Developer
+- **Arthur M. Artugue** — Lead Developer
 
 ## 🤝 Contributing
 
-This is a private project. Please contact the project maintainers for contribution guidelines.
+This is a private project. Contact the project maintainers for contribution guidelines.
 
 ## 📞 Support
 
-For issues and questions, please contact the development team.
+For issues and questions, contact the development team.
 
 ---
 
-**Last Updated**: 2026-01-19
+**Last Updated**: 2026-03-01
