@@ -1,112 +1,116 @@
-# name: workflow
+name: workflow
 
-# on:
-#   push:
-#     branches:
-#       - staging
-#       - main
+on:
+  push:
+    branches:
+      - staging
+      - main
 
-# jobs:
-#   check:
-#     if: github.ref == 'refs/heads/staging'
-#     runs-on: ubuntu-latest
-#     container:
-#       image: node:22
-#     steps:
-#       # Setup Node.js
-#       - uses: actions/checkout@v3
+jobs:
+  check:
+    if: github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-latest
+    container:
+      image: node:22
+    steps:
+      # Setup Node.js
+      - uses: actions/checkout@v3
 
-#       - uses: actions/setup-node@v3
-#         with:
-#           node-version: "20"
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "20"
 
-#       # Install dependencies
-#       - run: npm ci
+      # Install dependencies
+      - run: npm ci
 
-#       # Run ESLint
-#       - run: npm run lint
+      # Run ESLint
+      - run: npm run lint
 
-#       # Run tests
-#       - run: npm test -- src/tests/auth.test.ts
-#         env:
-#           JWT_SECRET: test-secret-key-for-ci-cd-testing-only-minimum-32-chars
-#           MESSAGE_CONTENT_ENCRYPTION_KEY: test-secret-key-for-ci-cd-testing-only-minimum-32-chars
-#           PUBSUB_CHAT_BOT_TOPIC: test-topic
+      # Run tests
+      - run: npm test -- src/tests/auth.test.ts
+        env:
+          JWT_SECRET: test-secret-key-for-ci-cd-testing-only-minimum-32-chars
+          MESSAGE_CONTENT_ENCRYPTION_KEY: test-secret-key-for-ci-cd-testing-only-minimum-32-chars
+          PUBSUB_SERVICE_ACCOUNT_EMAIL: service_account.iam.gserviceaccount.com
+          PUBSUB_AUDIENCE: https://service-a2-c3.a.run.app
 
-#   build-and-deploy:
-#     if: github.ref == 'refs/heads/main'
-#     runs-on: ubuntu-latest
-#     environment: Production
-#     env:
-#       SERVICE_NAME: hw-chat-bot-api
-#       GCP_PROJECT_ID: heron-wellnest
-#       REGION: us-central1
-#       ARTIFACT_REGISTRY_REPO: heron-wellnest-repo
-#     steps:
-#       - uses: actions/checkout@v3
+  build-and-deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: Production
+    env:
+      SERVICE_NAME: hw-notification-api
+      GCP_PROJECT_ID: heron-wellnest
+      REGION: us-central1
+      ARTIFACT_REGISTRY_REPO: heron-wellnest-repo
+    steps:
+      - uses: actions/checkout@v3
 
-#       # Setup Node.js
-#       - uses: actions/setup-node@v3
-#         with:
-#           node-version: "20"
+      # Setup Node.js
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "20"
 
-#       # Install dependencies (needed for build)
-#       - run: npm ci
+      # Install dependencies (needed for build)
+      - run: npm ci
 
-#       # Run ESLint
-#       - run: npm run lint
+      # Run ESLint
+      - run: npm run lint
 
-#       # Run tests
-#       - run: npm test -- src/tests/auth.test.ts
-#         env:
-#           JWT_SECRET: test-secret-key-for-ci-cd-testing-only-minimum-32-chars
-#           MESSAGE_CONTENT_ENCRYPTION_KEY: test-secret-key-for-ci-cd-testing-only-minimum-32-chars
-#           PUBSUB_CHAT_BOT_TOPIC: test-topic
+      # Run tests
+      - run: npm test -- src/tests/auth.test.ts
+        env:
+          JWT_SECRET: test-secret-key-for-ci-cd-testing-only-minimum-32-chars
+          MESSAGE_CONTENT_ENCRYPTION_KEY: test-secret-key-for-ci-cd-testing-only-minimum-32-chars
+          PUBSUB_SERVICE_ACCOUNT_EMAIL: service_account.iam.gserviceaccount.com
+          PUBSUB_AUDIENCE: https://service-a2-c3.a.run.app
 
-#       - uses: google-github-actions/auth@v1
-#         with:
-#           credentials_json: ${{ secrets.GCP_KEY }}
+      - uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_KEY }}
 
-#       # Setup gcloud CLI (optional if you want latest version)
-#       - uses: google-github-actions/setup-gcloud@v2
-#         with:
-#           project_id: ${{ env.GCP_PROJECT_ID }}
-#           version: latest
+      # Setup gcloud CLI (optional if you want latest version)
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          version: latest
 
-#       - run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+      - run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
-#       # Build Docker image
-#       - run: docker build -t ${{env.REGION}}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{env.ARTIFACT_REGISTRY_REPO}}/${{ env.SERVICE_NAME }}:latest .
+      # Build Docker image
+      - run: docker build -t ${{env.REGION}}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{env.ARTIFACT_REGISTRY_REPO}}/${{ env.SERVICE_NAME }}:latest .
 
-#       # Push Docker image
-#       - run: docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO}}/${{ env.SERVICE_NAME }}:latest
+      # Push Docker image
+      - run: docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO}}/${{ env.SERVICE_NAME }}:latest
 
-#       # Debug: Check variables
-#       - run: |
-#           echo "JWT_ALGORITHM=${{ vars.JWT_ALGORITHM }}"
-#           echo "PUBSUB_CHAT_BOT_TOPIC=${{ vars.PUBSUB_CHAT_BOT_TOPIC }}"
-#           echo "MESSAGE_CONTENT_ENCRYPTION_ALGORITHM=${{ vars.MESSAGE_CONTENT_ENCRYPTION_ALGORITHM }}"
+      # Debug: Check variables
+      - run: |
+          echo "JWT_ALGORITHM=${{ vars.JWT_ALGORITHM }}"
+          echo "PUBSUB_SERVICE_ACCOUNT_EMAIL=${{ vars.PUBSUB_SERVICE_ACCOUNT_EMAIL }}"
+          echo "PUBSUB_AUDIENCE=${{ vars.PUBSUB_AUDIENCE }}"
+          echo "MESSAGE_CONTENT_ENCRYPTION_ALGORITHM=${{ vars.MESSAGE_CONTENT_ENCRYPTION_ALGORITHM }}"
 
-#       # Deploy to Cloud Run
-#       - run: |
-#           gcloud run deploy ${{ env.SERVICE_NAME }} \
-#             --image ${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO}}/${{ env.SERVICE_NAME }}:latest \
-#             --region ${{ env.REGION }} \
-#             --platform managed \
-#             --allow-unauthenticated \
-#             --update-env-vars NODE_ENV=${{ vars.NODE_ENV }} \
-#             --update-env-vars DB_USER=${{ vars.DB_USER }} \
-#             --update-env-vars DB_NAME=${{ vars.DB_NAME }} \
-#             --update-env-vars DB_HOST=${{ vars.DB_HOST }} \
-#             --update-env-vars DB_PORT=${{ vars.DB_PORT }} \
-#             --update-env-vars JWT_ISSUER=${{ vars.JWT_ISSUER }} \
-#             --update-env-vars JWT_AUDIENCE=${{ vars.JWT_AUDIENCE }} \
-#             --update-env-vars JWT_ALGORITHM=${{ vars.JWT_ALGORITHM }} \
-#             --update-env-vars MESSAGE_CONTENT_ENCRYPTION_ALGORITHM=${{ vars.MESSAGE_CONTENT_ENCRYPTION_ALGORITHM }} \
-#             --update-env-vars PUBSUB_CHAT_BOT_TOPIC=${{ vars.PUBSUB_CHAT_BOT_TOPIC }} \
-#             --set-secrets DB_PASSWORD=DB_PASSWORD:latest,MESSAGE_CONTENT_ENCRYPTION_KEY=CHAT_BOT_CONTENT_ENCRYPTION_KEY:latest,JWT_SECRET=JWT_SECRET:latest \
-#             --timeout=300 \
-#             --concurrency=20 \
-#             --min-instances=0 \
-#             --max-instances=3 \
-#             --cpu-boost
+      # Deploy to Cloud Run
+      - run: |
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image ${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO}}/${{ env.SERVICE_NAME }}:latest \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --update-env-vars NODE_ENV=${{ vars.NODE_ENV }} \
+            --update-env-vars DB_USER=${{ vars.DB_USER }} \
+            --update-env-vars DB_NAME=${{ vars.DB_NAME }} \
+            --update-env-vars DB_HOST=${{ vars.DB_HOST }} \
+            --update-env-vars DB_PORT=${{ vars.DB_PORT }} \
+            --update-env-vars JWT_ISSUER=${{ vars.JWT_ISSUER }} \
+            --update-env-vars JWT_AUDIENCE=${{ vars.JWT_AUDIENCE }} \
+            --update-env-vars JWT_ALGORITHM=${{ vars.JWT_ALGORITHM }} \
+            --update-env-vars MESSAGE_CONTENT_ENCRYPTION_ALGORITHM=${{ vars.MESSAGE_CONTENT_ENCRYPTION_ALGORITHM }} \
+            --update-env-vars PUBSUB_SERVICE_ACCOUNT_EMAIL=${{ vars.PUBSUB_SERVICE_ACCOUNT_EMAIL }} \
+            --update-env-vars PUBSUB_AUDIENCE=${{ vars.PUBSUB_AUDIENCE }} \
+            --set-secrets DB_PASSWORD=DB_PASSWORD:latest,MESSAGE_CONTENT_ENCRYPTION_KEY=CHAT_BOT_CONTENT_ENCRYPTION_KEY:latest,JWT_SECRET=JWT_SECRET:latest \
+            --timeout=300 \
+            --concurrency=20 \
+            --min-instances=0 \
+            --max-instances=3 \
+            --cpu-boost
