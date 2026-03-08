@@ -19,7 +19,7 @@ import app from "../app.js";
 
 describe("Health Check", () => {
   it("should return status ok", async () => {
-    const res = await request(app).get("/api/v1/chat-bot/health")
+    const res = await request(app).get("/api/v1/notification/health")
     .set("origin", "https://wellnest-smoky.vercel.app");
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ status: "ok" });
