@@ -42,7 +42,7 @@ const swaggerOptions = {
     openapi: '3.0.0',
     info: {
       title: 'Heron Wellnest Notification API',
-      version: '1.0.5',
+      version: '1.0.0',
       description:"Heron Wellnest Notification API provides endpoints for managing notifications within the Heron Wellnest platform.",
     },
     servers: [
