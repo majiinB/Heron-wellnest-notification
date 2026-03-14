@@ -6,8 +6,27 @@ import { AppError } from "../types/appError.type.js";
 import { validateUser } from "../utils/authorization.util.js";
 import { validate as isUuid } from "uuid";
 import type { Notification } from "../models/notification.model.js";
+import { logger } from "../utils/logger.util.js";
 
 const VALID_TYPES: Notification["type"][] = ["activities", "reminders", "guidance_session", "system_alerts"];
+
+type PubSubMessageEnvelope = {
+  message?: {
+    data?: string;
+    messageId?: string;
+    attributes?: Record<string, string>;
+    publishTime?: string;
+  };
+  subscription?: string;
+};
+
+type NotificationPubSubPayload = {
+  userId: string;
+  type: Notification["type"];
+  title: string;
+  content: string;
+  data?: Record<string, unknown>;
+};
 
 /**
  * Controller class for handling Notification-related HTTP requests.
@@ -39,15 +58,45 @@ export class NotificationController {
    * Handles creation of a notification.
    * FOR INTERNAL / PUBSUB USE ONLY — protected by Google OIDC middleware.
    *
-   * Reads `userId`, `type`, `title`, `content`, and optional `data` from the request body.
+   * Expects a Google Pub/Sub push message envelope in the request body.
+   * The controller will decode the base64 `message.data` field, parse the
+   * JSON payload, validate it, and then create a notification.
    *
-   * @param req - The request containing notification data in the body.
+   * @param req - The request containing the Pub/Sub message envelope.
    * @param res - The response object.
    * @param _next - The next middleware function (unused).
    * @throws {AppError} If required fields are missing or invalid.
    */
   public async handleNotificationCreation(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-    const { userId, type, title, content, data } = req.body || {};
+    const envelope = req.body as PubSubMessageEnvelope;
+
+    if (!envelope || !envelope.message) {
+      logger.error("[NotificationController] Invalid Pub/Sub message format", { body: req.body });
+      throw new AppError(400, "BAD_REQUEST", "Bad Request: Invalid Pub/Sub message format", true);
+    }
+
+    if (!envelope.message.data) {
+      logger.error("[NotificationController] No data field in Pub/Sub message", { message: envelope.message });
+      throw new AppError(400, "BAD_REQUEST", "Bad Request: No data field in Pub/Sub message", true);
+    }
+
+    let decoded: string;
+    try {
+      decoded = Buffer.from(envelope.message.data, "base64").toString("utf-8");
+    } catch (error) {
+      logger.error("[NotificationController] Failed to decode Pub/Sub data", { error });
+      throw new AppError(400, "BAD_REQUEST", "Bad Request: Unable to decode Pub/Sub message data", true);
+    }
+
+    let payload: NotificationPubSubPayload;
+    try {
+      payload = JSON.parse(decoded) as NotificationPubSubPayload;
+    } catch (error) {
+      logger.error("[NotificationController] Invalid JSON in Pub/Sub data", { decoded, error });
+      throw new AppError(400, "BAD_REQUEST", "Bad Request: Invalid JSON in Pub/Sub message data", true);
+    }
+
+    const { userId, type, title, content, data } = payload;
 
     if (!userId || userId.toString().trim() === "") {
       throw new AppError(400, "BAD_REQUEST", "Bad Request: userId is required", true);
