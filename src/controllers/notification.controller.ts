@@ -25,6 +25,8 @@ type NotificationPubSubPayload = {
   type: Notification["type"];
   title: string;
   content: string;
+  sendEmail?: boolean;
+  sendInApp?: boolean;
   data?: Record<string, unknown>;
 };
 
@@ -69,63 +71,106 @@ export class NotificationController {
    */
   public async handleNotificationCreation(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
     const envelope = req.body as PubSubMessageEnvelope;
+    const ackInvalidMessage = (reason: string, details?: Record<string, unknown>): void => {
+      logger.warn("[NotificationController] Dropping non-retryable Pub/Sub message", {
+        reason,
+        ...(details ?? {}),
+      });
+
+      // Ack invalid payloads so Pub/Sub does not retry indefinitely.
+      res.status(204).send();
+    };
 
     if (!envelope || !envelope.message) {
-      logger.error("[NotificationController] Invalid Pub/Sub message format", { body: req.body });
-      throw new AppError(400, "BAD_REQUEST", "Bad Request: Invalid Pub/Sub message format", true);
+      ackInvalidMessage("Invalid Pub/Sub message format", { body: req.body });
+      return;
     }
 
     if (!envelope.message.data) {
-      logger.error("[NotificationController] No data field in Pub/Sub message", { message: envelope.message });
-      throw new AppError(400, "BAD_REQUEST", "Bad Request: No data field in Pub/Sub message", true);
+      ackInvalidMessage("No data field in Pub/Sub message", {
+        messageId: envelope.message.messageId,
+      });
+      return;
     }
 
     let decoded: string;
     try {
       decoded = Buffer.from(envelope.message.data, "base64").toString("utf-8");
     } catch (error) {
-      logger.error("[NotificationController] Failed to decode Pub/Sub data", { error });
-      throw new AppError(400, "BAD_REQUEST", "Bad Request: Unable to decode Pub/Sub message data", true);
+      ackInvalidMessage("Unable to decode Pub/Sub message data", {
+        messageId: envelope.message.messageId,
+        error,
+      });
+      return;
     }
 
     let payload: NotificationPubSubPayload;
     try {
       payload = JSON.parse(decoded) as NotificationPubSubPayload;
     } catch (error) {
-      logger.error("[NotificationController] Invalid JSON in Pub/Sub data", { decoded, error });
-      throw new AppError(400, "BAD_REQUEST", "Bad Request: Invalid JSON in Pub/Sub message data", true);
+      ackInvalidMessage("Invalid JSON in Pub/Sub message data", {
+        messageId: envelope.message.messageId,
+        decoded,
+        error,
+      });
+      return;
     }
 
     const { userId, type, title, content, data } = payload;
 
     if (!userId || userId.toString().trim() === "") {
-      throw new AppError(400, "BAD_REQUEST", "Bad Request: userId is required", true);
+      ackInvalidMessage("userId is required", { payload });
+      return;
     }
 
     if (!isUuid(userId.toString())) {
-      throw new AppError(400, "BAD_REQUEST", "Bad Request: Invalid userId format", true);
+      ackInvalidMessage("Invalid userId format", { userId });
+      return;
     }
 
     if (!type || !VALID_TYPES.includes(type)) {
-      throw new AppError(
-        400,
-        "BAD_REQUEST",
-        `Bad Request: type must be one of ${VALID_TYPES.join(", ")}`,
-        true
-      );
+      ackInvalidMessage(`type must be one of ${VALID_TYPES.join(", ")}`, { type });
+      return;
     }
 
     const trimmedTitle = title?.toString().trim();
     if (!trimmedTitle) {
-      throw new AppError(400, "BAD_REQUEST", "Bad Request: title is required", true);
+      ackInvalidMessage("title is required", { title });
+      return;
     }
 
     const trimmedContent = content?.toString().trim();
     if (!trimmedContent) {
-      throw new AppError(400, "BAD_REQUEST", "Bad Request: content is required", true);
+      ackInvalidMessage("content is required", { content });
+      return;
     }
 
-    await this.notificationService.createNotification(userId, type, trimmedTitle, trimmedContent, data);
+    if (payload.sendInApp !== undefined && typeof payload.sendInApp !== "boolean") {
+      ackInvalidMessage("sendInApp must be a boolean", { sendInApp: payload.sendInApp });
+      return;
+    }
+
+    const sendInApp = payload.sendInApp ?? true;
+
+    if(sendInApp) {
+      await this.notificationService.createNotification(userId, type, trimmedTitle, trimmedContent, data);
+    }
+
+    const sendEmail = payload.sendEmail ?? false;
+    if (sendEmail) {
+      try {
+        await this.notificationService.sendSmtpEmail(userId, trimmedTitle, trimmedContent);
+      } catch (error) {
+        logger.error("Failed to send notification email", {
+          userId,
+          title: trimmedTitle,
+          content: trimmedContent,
+          error: (error as Error).message,
+        });
+        // Do not fail the entire request if email sending fails; the notification was still created.
+      }
+    }
+  
 
     const response: ApiResponse = {
       success: true,

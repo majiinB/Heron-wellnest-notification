@@ -2,11 +2,28 @@ import { Notification } from "../models/notification.model.js";
 import { NotificationRepository } from "../repository/notification.repository.js";
 import { AppError } from "../types/appError.type.js";
 import { logger } from "../utils/logger.util.js";
+import { sendSmtpEmail } from "../config/smtp.config.js";
+import { buildAppEmailTemplate } from "../utils/emailTemplate.util.js";
+import { StudentRepository } from "../repository/student.repository.js";
+import { env } from "../config/env.config.js";
 
 export type PaginatedNotifications = {
   notifications: Notification[];
   hasMore: boolean;
   nextCursor?: string;
+};
+
+export type SmtpDeliverySummary = {
+  messageId: string;
+  accepted: string[];
+  rejected: string[];
+  response: string;
+};
+
+export type SmtpEmailResult = {
+  to: string;
+  from?: string;
+  smtp: SmtpDeliverySummary;
 };
 
 /**
@@ -35,14 +52,17 @@ export type PaginatedNotifications = {
  */
 export class NotificationService {
   private notificationRepo: NotificationRepository;
+  private studentRepo: StudentRepository;
 
   /**
    * Creates an instance of NotificationService.
    *
    * @param notificationRepo - The repository used for accessing and managing notifications.
+   * @param studentRepo - The repository used for accessing and managing student information. 
    */
-  constructor(notificationRepo: NotificationRepository) {
+  constructor(notificationRepo: NotificationRepository, studentRepo: StudentRepository) {
     this.notificationRepo = notificationRepo;
+    this.studentRepo = studentRepo;
   }
 
   /**
@@ -198,5 +218,61 @@ export class NotificationService {
     }
 
     await this.notificationRepo.softDelete(notificationId, userId);
+  }
+
+  /**
+   * Sends a styled SMTP email.
+   *
+   * @param to - Recipient email address.
+   * @param from - Optional sender address. Falls back to SMTP_DEFAULT_FROM.
+   * @param name - Optional recipient name used in the email message.
+   * @returns A normalized SMTP delivery summary.
+   */
+  public async sendSmtpEmail(userId: string, topic: string, message: string, from?: string): Promise<SmtpEmailResult> {
+    let to = "";
+    let name = "User";
+
+    try{
+      const studentInfo = await this.studentRepo.findStudentInfoById(userId);
+
+      if(studentInfo) {
+        name = studentInfo.user_name;
+        to = studentInfo.email;
+      }
+    }catch (error) {
+      logger.error(`Failed to fetch student info for userId ${userId}: ${(error as Error).message}`);
+      throw new AppError(
+        200,
+        "STUDENT_INFO_FETCH_FAILED",
+        "Failed to fetch student information for email sending.",
+        true
+      );
+    }
+
+    const trimmedTo = to.trim();
+    if (trimmedTo === "") {
+      throw new AppError(200, "BAD_REQUEST", "Bad Request: recipient email (to) is required", true);
+    }
+
+    const Emailtopic = topic.trim() || "Heron Wellnest Notification";
+    const messageBody = `Hello ${name?.trim() || "there"},\n${message}.`;
+
+    const result = await sendSmtpEmail({
+      to: trimmedTo,
+      from: from?.trim() || undefined,
+      subject: Emailtopic,
+      html: buildAppEmailTemplate({ topic: Emailtopic, message: messageBody }),
+    });
+
+    return {
+      to: trimmedTo,
+      from: from?.trim() || env.SMTP_DEFAULT_FROM,
+      smtp: {
+        messageId: result.messageId,
+        accepted: result.accepted,
+        rejected: result.rejected,
+        response: result.response,
+      },
+    };
   }
 }

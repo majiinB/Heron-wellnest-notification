@@ -3,6 +3,26 @@ import * as z from "zod";
 
 dotenv.config();
 
+const booleanFromEnv = z.preprocess((value) => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+
+    if (["true", "1", "yes", "y", "on"].includes(normalized)) {
+      return true;
+    }
+
+    if (["false", "0", "no", "n", "off"].includes(normalized)) {
+      return false;
+    }
+  }
+
+  return value;
+}, z.boolean());
+
 /**
  * Environment configuration for the API.
  *
@@ -50,7 +70,19 @@ export const envSchema = z.object({
   // Pub/Sub
   // PUBSUB_CHAT_BOT_TOPIC: z.string().min(1, "PUBSUB_CHAT_BOT_TOPIC is required"),
   PUBSUB_AUDIENCE: z.string().url("PUBSUB_AUDIENCE must be a valid URL"),
-  PUBSUB_SERVICE_ACCOUNT_EMAIL: z.string().email("PUBSUB_SERVICE_ACCOUNT_EMAIL must be a valid email")
+  PUBSUB_SERVICE_ACCOUNT_EMAIL: z.string().email("PUBSUB_SERVICE_ACCOUNT_EMAIL must be a valid email"),
+
+  // Email provider
+  RESEND_API_KEY: z.string().min(1, "RESEND_API_KEY is required when using Resend").optional(),
+  RESEND_DEFAULT_FROM: z.string().optional(),
+
+  // SMTP
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_SECURE: booleanFromEnv.optional(),
+  SMTP_DEFAULT_FROM: z.string().optional(),
 }).superRefine((env, ctx) => {
   if (env.JWT_ALGORITHM === "HS256" && !env.JWT_SECRET) {
     ctx.addIssue({

@@ -32,6 +32,8 @@ import { errorMiddleware } from './middlewares/error.middleware.js';
 import { env } from './config/env.config.js';
 import notificationRoute from './routes/notification.routes.js';
 import fs from 'fs';
+import { sendSmtpEmail } from './config/smtp.config.js';
+import { buildAppEmailTemplate } from './utils/emailTemplate.util.js';
 
 const app : express.Express = express();
 const isTS = fs.existsSync('./src/routes');
@@ -80,6 +82,72 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 // This is a health check route
 app.get('/api/v1/notification/health', (_req, res) => {
   res.status(200).json({ status: 'ok' });
+});
+
+app.get('/api/v1/test/mail', async (req, res, next) => {
+  try {
+    
+    const to = "aartugue.a12241566@umak.edu.ph";
+    const name = "Arthur M. Artugue";
+    const from = undefined;
+    const topic = 'On-boarding Complete';
+    const message = `Hello ${name},\nYour Certification of Registration was processed successfully.\nYou can now proceed to login to your account.`;
+    const result = await sendSmtpEmail({
+      to,
+      from: typeof from === 'string' ? from : undefined,
+      subject: topic,
+      html: buildAppEmailTemplate({ topic, message }),
+    });
+
+    res.status(200).json({
+      message: 'Test email sent successfully.',
+      to,
+      from: typeof from === 'string' ? from : env.SMTP_DEFAULT_FROM,
+      smtp: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/v1/test/mail/smtp', async (req, res, next) => {
+  try {
+    const to = req.query.to;
+    const from = req.query.from;
+    const name = req.query.name;
+
+    if (!to || typeof to !== 'string') {
+      res.status(400).json({
+        message: "Missing required query param 'to'.",
+        example: '/api/v1/test/mail/smtp?to=you@example.com',
+      });
+      return;
+    }
+
+    const topic = 'Heron Wellnest SMTP Test';
+    const message = `Hello ${typeof name === 'string' ? name : 'there'},\nThis is a test email from Heron Wellnest Notification API via SMTP.\nIf you received this, your SMTP integration is working.`;
+
+    const result = await sendSmtpEmail({
+      to,
+      from: typeof from === 'string' ? from : undefined,
+      subject: topic,
+      html: buildAppEmailTemplate({ topic, message }),
+    });
+
+    res.status(200).json({
+      message: 'SMTP test email sent successfully.',
+      to,
+      from: typeof from === 'string' ? from : env.SMTP_DEFAULT_FROM,
+      smtp: {
+        messageId: result.messageId,
+        accepted: result.accepted,
+        rejected: result.rejected,
+        response: result.response,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.use('/api/v1/notification', notificationRoute);
