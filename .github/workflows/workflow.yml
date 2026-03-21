@@ -108,6 +108,12 @@ jobs:
             --update-env-vars MESSAGE_CONTENT_ENCRYPTION_ALGORITHM=${{ vars.MESSAGE_CONTENT_ENCRYPTION_ALGORITHM }} \
             --update-env-vars PUBSUB_SERVICE_ACCOUNT_EMAIL=${{ vars.PUBSUB_SERVICE_ACCOUNT_EMAIL }} \
             --update-env-vars PUBSUB_AUDIENCE=${{ vars.PUBSUB_AUDIENCE }} \
+            --update-env-vars SMTP_DEFAULT_FROM=${{ vars.SMTP_DEFAULT_FROM }} \
+            --update-env-vars SMTP_HOST=${{ vars.SMTP_HOST }} \
+            --update-env-vars SMTP_PASS=${{ vars.SMTP_PASS }} \
+            --update-env-vars SMTP_PORT=${{ vars.SMTP_PORT }} \
+            --update-env-vars SMTP_SECURE=${{ vars.SMTP_SECURE }} \
+            --update-env-vars SMTP_USER=${{ vars.SMTP_USER }} \
             --set-secrets DB_PASSWORD=DB_PASSWORD:latest,MESSAGE_CONTENT_ENCRYPTION_KEY=CHAT_BOT_CONTENT_ENCRYPTION_KEY:latest,JWT_SECRET=JWT_SECRET:latest \
             --timeout=300 \
             --concurrency=20 \
