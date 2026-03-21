@@ -32,8 +32,6 @@ import { errorMiddleware } from './middlewares/error.middleware.js';
 import { env } from './config/env.config.js';
 import notificationRoute from './routes/notification.routes.js';
 import fs from 'fs';
-import { sendSmtpEmail } from './config/smtp.config.js';
-import { buildAppEmailTemplate } from './utils/emailTemplate.util.js';
 
 const app : express.Express = express();
 const isTS = fs.existsSync('./src/routes');
