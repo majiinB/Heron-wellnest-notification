@@ -84,7 +84,7 @@ export const envSchema = z.object({
   SMTP_SECURE: booleanFromEnv.optional(),
   SMTP_DEFAULT_FROM: z.string().optional(),
 
-  CORS_ALLOWED_ORIGINS: z.string(), // Comma-separated list of allowed origins for CORS
+  CORS_ALLOWED_ORIGINS: z.string().optional(), // Comma-separated list of allowed origins for CORS
 }).superRefine((env, ctx) => {
   if (env.JWT_ALGORITHM === "HS256" && !env.JWT_SECRET) {
     ctx.addIssue({
