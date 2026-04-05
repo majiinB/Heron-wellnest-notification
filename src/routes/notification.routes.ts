@@ -6,11 +6,20 @@ import { NotificationRepository } from "../repository/notification.repository.js
 import { NotificationService } from "../services/notification.service.js";
 import { asyncHandler } from "../utils/asyncHandler.util.js";
 import { StudentRepository } from "../repository/student.repository.js";
+import { AdminRepository } from "../repository/admin.repository.js";
+import { CounselorRepository } from "../repository/counselor.repository.js";
 
 const router: Router = express.Router();
 const notificationRepository = new NotificationRepository();
 const studentRepository = new StudentRepository();
-const notificationService = new NotificationService(notificationRepository, studentRepository);
+const adminRepository = new AdminRepository();
+const counselorRepository = new CounselorRepository();
+const notificationService = new NotificationService(
+	notificationRepository,
+	studentRepository,
+	adminRepository,
+	counselorRepository,
+);
 const notificationController = new NotificationController(notificationService);
 
 

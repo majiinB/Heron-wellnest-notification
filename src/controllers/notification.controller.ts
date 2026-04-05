@@ -193,10 +193,8 @@ export class NotificationController {
    */
   public async handleGetNotifications(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
     const userId = req.user?.sub;
-    const userRole = req.user?.role;
 
-    validateUser(userId, userRole, "student");
-
+    validateUser(userId);
     const limitParam = req.query.limit as string | undefined;
     const lastNotificationId = req.query.lastNotificationId as string | undefined;
 
@@ -230,9 +228,8 @@ export class NotificationController {
    */
   public async handleGetUnreadNotifications(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
     const userId = req.user?.sub;
-    const userRole = req.user?.role;
 
-    validateUser(userId, userRole, "student");
+    validateUser(userId);
 
     const notifications = await this.notificationService.getUnreadNotifications(userId!);
 
@@ -256,9 +253,8 @@ export class NotificationController {
    */
   public async handleGetUnreadCount(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
     const userId = req.user?.sub;
-    const userRole = req.user?.role;
 
-    validateUser(userId, userRole, "student");
+    validateUser(userId);
 
     const count = await this.notificationService.getUnreadCount(userId!);
 
@@ -282,9 +278,8 @@ export class NotificationController {
    */
   public async handleMarkAsRead(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
     const userId = req.user?.sub;
-    const userRole = req.user?.role;
 
-    validateUser(userId, userRole, "student");
+    validateUser(userId);
 
     const notificationId = req.params.notificationId as string;
 
@@ -317,9 +312,8 @@ export class NotificationController {
    */
   public async handleMarkAllAsRead(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
     const userId = req.user?.sub;
-    const userRole = req.user?.role;
 
-    validateUser(userId, userRole, "student");
+    validateUser(userId);
 
     await this.notificationService.markAllAsRead(userId!);
 
@@ -342,9 +336,8 @@ export class NotificationController {
    */
   public async handleDeleteNotification(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
     const userId = req.user?.sub;
-    const userRole = req.user?.role;
 
-    validateUser(userId, userRole, "student");
+    validateUser(userId);
 
     const notificationId = req.params.notificationId as string;
 

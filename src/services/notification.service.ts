@@ -5,6 +5,8 @@ import { logger } from "../utils/logger.util.js";
 import { sendSmtpEmail } from "../config/smtp.config.js";
 import { buildAppEmailTemplate } from "../utils/emailTemplate.util.js";
 import { StudentRepository } from "../repository/student.repository.js";
+import { AdminRepository } from "../repository/admin.repository.js";
+import { CounselorRepository } from "../repository/counselor.repository.js";
 import { env } from "../config/env.config.js";
 
 export type PaginatedNotifications = {
@@ -53,16 +55,27 @@ export type SmtpEmailResult = {
 export class NotificationService {
   private notificationRepo: NotificationRepository;
   private studentRepo: StudentRepository;
+  private adminRepo: AdminRepository;
+  private counselorRepo: CounselorRepository;
 
   /**
    * Creates an instance of NotificationService.
    *
    * @param notificationRepo - The repository used for accessing and managing notifications.
-   * @param studentRepo - The repository used for accessing and managing student information. 
+   * @param studentRepo - The repository used for accessing and managing student information.
+   * @param adminRepo - The repository used for accessing and managing admin information.
+   * @param counselorRepo - The repository used for accessing and managing counselor information.
    */
-  constructor(notificationRepo: NotificationRepository, studentRepo: StudentRepository) {
+  constructor(
+    notificationRepo: NotificationRepository,
+    studentRepo: StudentRepository,
+    adminRepo: AdminRepository,
+    counselorRepo: CounselorRepository,
+  ) {
     this.notificationRepo = notificationRepo;
     this.studentRepo = studentRepo;
+    this.adminRepo = adminRepo;
+    this.counselorRepo = counselorRepo;
   }
 
   /**
@@ -233,18 +246,21 @@ export class NotificationService {
     let name = "User";
 
     try{
-      const studentInfo = await this.studentRepo.findStudentInfoById(userId);
+      const recipientInfo =
+        (await this.studentRepo.findStudentInfoById(userId)) ??
+        (await this.adminRepo.findAdminInfoById(userId)) ??
+        (await this.counselorRepo.findCounselorInfoById(userId));
 
-      if(studentInfo) {
-        name = studentInfo.user_name;
-        to = studentInfo.email;
+      if (recipientInfo) {
+        name = recipientInfo.user_name;
+        to = recipientInfo.email;
       }
     }catch (error) {
-      logger.error(`Failed to fetch student info for userId ${userId}: ${(error as Error).message}`);
+      logger.error(`Failed to fetch recipient info for userId ${userId}: ${(error as Error).message}`);
       throw new AppError(
         200,
-        "STUDENT_INFO_FETCH_FAILED",
-        "Failed to fetch student information for email sending.",
+        "RECIPIENT_INFO_FETCH_FAILED",
+        "Failed to fetch recipient information for email sending.",
         true
       );
     }
