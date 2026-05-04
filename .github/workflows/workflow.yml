@@ -5,6 +5,14 @@ on:
     branches:
       - staging
       - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        required: true
+        options:
+          - staging
+          - production
 
 jobs:
   check:
